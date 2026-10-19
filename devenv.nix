@@ -1,11 +1,8 @@
-{ pkgs, ... }:
+{ pkgs, lib, config, inputs, ... }:
 
 {
   # Linux native dependencies of Tauri/WebKitGTK, LiveKit/WebRTC, and cpal.
   packages = with pkgs; [
-    rustc
-    cargo
-    nodejs_24 # build.rs builds the Vite frontend before checking Rust
     pkg-config
     clang
     cmake
@@ -19,5 +16,11 @@
     openssl
     libva
     pipewire
+    github-cli
   ];
+
+  # why didn't the robot use the languages feature of devenv?
+  languages.rust.enable = true;
+  languages.typescript.enable = true;
+
 }
