@@ -26,6 +26,11 @@ name: CI
 # the local Xcode 26.6 that builds this cleanly.
 on:
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: Build/test Windows and upload a debug executable without running the other jobs
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,6 +42,7 @@ concurrency:
 jobs:
   frontend:
     name: Frontend (check + test + build)
+    if: ${{ !inputs.windows_only }}
     runs-on: macos-26
     # #724: no job here had a backstop -- a hang (rust-gate's macOS runner
     # stalled ~36min on a single test with no other signal) would otherwise
@@ -63,6 +69,7 @@ jobs:
 
   rust:
     name: Rust (build + test, full Xcode, no CLT rpath)
+    if: ${{ !inputs.windows_only }}
     runs-on: macos-26
     # #724: same macOS Rust-job backstop as rust-gate.yml -- see that file's
     # `rust` job comment for the measured-duration basis.
@@ -149,9 +156,17 @@ jobs:
       - name: cargo test (lib)
         working-directory: apps/desktop/src-tauri
         run: cargo test --lib --locked
+      - uses: actions/upload-artifact@v7
+        if: ${{ inputs.windows_only }}
+        with:
+          name: petal-windows-debug-${{ github.sha }}
+          path: apps/desktop/src-tauri/target/debug/desktop.exe
+          if-no-files-found: error
+          retention-days: 7
 
   rust-linux:
     name: Rust Linux (build + lib tests)
+    if: ${{ !inputs.windows_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -192,6 +207,7 @@ jobs:
   # billing), not the 10x macOS runners. Mirrored in scripts/ci-local.sh.
   backend:
     name: Backend (typecheck + tests)
+    if: ${{ !inputs.windows_only }}
     runs-on: ubuntu-latest
     # #724: unbounded-hang backstop, see the `frontend` job's comment above.
     timeout-minutes: 15
@@ -211,6 +227,7 @@ jobs:
 
   web-harness:
     name: Web-harness (build + tests)
+    if: ${{ !inputs.windows_only }}
     runs-on: ubuntu-latest
     # #724: unbounded-hang backstop, see the `frontend` job's comment above.
     timeout-minutes: 15
