@@ -2,7 +2,7 @@
 
 {
   # Linux native dependencies of Tauri/WebKitGTK, LiveKit/WebRTC, and cpal.
-  packages = with pkgs; [
+  packages = [ pkgs.github-cli ] ++ lib.optionals pkgs.stdenv.isLinux (with pkgs; [
     pkg-config
     clang
     cmake
@@ -16,10 +16,10 @@
     openssl
     libva
     pipewire
-    github-cli
-  ];
+  ]);
 
   # why didn't the robot use the languages feature of devenv?
   languages.rust.enable = true;
   languages.typescript.enable = true;
+  languages.swift.enable = pkgs.stdenv.isDarwin;
 }
