@@ -1,7 +1,7 @@
 // Windows and macOS both carry a working (still maturing) media stack: macOS
 // uses the modules under `#[cfg(target_os = "macos")]`, Windows uses the
-// `windows_*` modules and the real session in session_stub.rs. The non-macOS
-// stubs below exist only where a macOS module has no Windows counterpart yet.
+// `windows_*` modules and the real session in session_stub.rs. Linux uses
+// session_linux.rs: a compile-only session with no native media support.
 #![cfg_attr(
     not(target_os = "macos"),
     allow(
@@ -195,8 +195,11 @@ pub mod video_color;
 pub mod rooms;
 #[cfg(target_os = "macos")]
 mod session;
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 #[path = "session_stub.rs"]
+mod session;
+#[cfg(target_os = "linux")]
+#[path = "session_linux.rs"]
 mod session;
 mod share_border;
 #[cfg(target_os = "windows")]
@@ -1662,6 +1665,7 @@ pub fn run() {
             arm_main_window_reveal_fallback(app.handle());
             // Desktop app, not a browser: no autofill dropdowns / password-save
             // prompts on any input, ever (engine-level, sticks for new inputs).
+            #[cfg(target_os = "windows")]
             autofill::disable_autofill(app.handle());
             // Native corner radius: every rectangular Petal window is created
             // `transparent: true` from tauri.conf.json (shared with macOS), but
@@ -1683,8 +1687,11 @@ pub fn run() {
             }
             // AI chat floating panel (#738): a hidden WebviewWindow singleton
             // hosting the ai-chat-panel route (macOS NSPanel parity).
-            ai_chat::panel::create_ai_chat_panel(app.handle());
-            log::info!("petal: ai-chat panel created");
+            #[cfg(target_os = "windows")]
+            {
+                ai_chat::panel::create_ai_chat_panel(app.handle());
+                log::info!("petal: ai-chat panel created");
+            }
             #[cfg(target_os = "windows")]
             {
                 control_consent::create_control_consent_panel(app.handle());
@@ -1812,6 +1819,7 @@ pub fn run() {
             remote_control::remote_control_request_timed_out,
             remote_control::remote_control_revoke,
             remote_control::remote_control_answer_consent,
+            #[cfg(target_os = "windows")]
             remote_control::remote_control_answer_escalation,
             session::share_window,
             session::set_share_control_mode,
@@ -1836,8 +1844,11 @@ pub fn run() {
             share_capture_options::set_share_cursor_in_video,
             // Petal View's label-addressed twins of the commands above: the
             // region route holds a window label, never a capture token.
+            #[cfg(target_os = "windows")]
             region_window::region_share_capture_options,
+            #[cfg(target_os = "windows")]
             region_window::set_region_share_fps,
+            #[cfg(target_os = "windows")]
             region_window::set_region_share_cursor_in_video,
             gallery_bridge::gallery_bridge_config,
             main_window::open_main_route,
@@ -1888,7 +1899,9 @@ pub fn run() {
             ai_chat::commands::ai_chat_control_reject,
             ai_chat::commands::ai_chat_control_resume,
             ai_chat::commands::ai_chat_control_status,
+            #[cfg(target_os = "windows")]
             ai_chat::panel::ai_chat_panel_present,
+            #[cfg(target_os = "windows")]
             ai_chat::panel::ai_chat_panel_dismiss,
             #[cfg(target_os = "windows")]
             control_consent::control_consent_present,

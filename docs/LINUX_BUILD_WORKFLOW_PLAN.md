@@ -1,6 +1,32 @@
-# Future workflow: classify, then address Linux Rust build failures
+# Linux build: compile-only target and original failure plan
 
-**Status:** planning only. Do not resume the abandoned build-to-green workflows. Their last `cargo check --locked --lib` failed with **75 errors** (log: `/tmp/petal-linux-check-lib.log` on the current machine). Neither a Linux build nor macOS/Windows regression was proven. The existing `pipewire-video` worktree has uncommitted code, devenv, and spike files; preserve them. A future session should regenerate the compiler log rather than assume `/tmp` survives.
+## Compile-only target implemented
+
+Linux now selects `apps/desktop/src-tauri/src/session_linux.rs` explicitly with
+`cfg(target_os = "linux")`; Windows still selects `session_stub.rs` unchanged.
+Linux session queries report no room, shares, or publishing media, and remote
+control stays off. Session mutation commands reject unsupported operations.
+Permission stubs do not claim grants. Windows-only startup hooks, commands,
+and telepointer code/tests are gated to Windows. Shared modules remain compiled;
+
+Verified in the repository's devenv shell, from `apps/desktop/src-tauri`, on
+`x86_64-unknown-linux-gnu` (existing desktop `node_modules` used):
+
+| Command | Exit | Result |
+|---|---:|---|
+| Baseline `cargo check --locked --lib` | 101 | Reproduced 75 errors; `/tmp/petal-linux-baseline.log` |
+| `cargo check --locked` | 0 | Library and binary type-check |
+| `cargo build --locked` | 0 | Linked `target/debug/desktop` |
+| `cargo test --locked --lib linux_` | 0 | Both new Linux stub tests pass |
+| `cargo test --locked --lib` | 0 | 1343 passed, 2 ignored |
+
+Existing compiler warnings and the optional missing-CUDA warning remain. No
+Linux runtime/media support is claimed. GUI startup, release packaging, other
+Linux architectures, and native Windows/macOS regression builds are unverified.
+
+## Original plan (historical)
+
+**Original status:** planning only. Do not resume the abandoned build-to-green workflows. Their last `cargo check --locked --lib` failed with **75 errors** (log: `/tmp/petal-linux-check-lib.log` on the current machine). Neither a Linux build nor macOS/Windows regression was proven. The existing `pipewire-video` worktree has uncommitted code, devenv, and spike files; preserve them. A future session should regenerate the compiler log rather than assume `/tmp` survives.
 
 ## Reproduce the baseline in a future session
 

@@ -375,13 +375,12 @@ mod macos {
 }
 
 // =============================================================================
-// Non-macOS adapters. These commands model macOS TCC gates, which do not
-// exist on Windows or Linux. Report them as ready so those platforms are not
-// trapped behind macOS-only System Settings links. Native capture/input
-// permissions and unsupported fallbacks remain independent per platform.
+// Windows adapters. These commands model macOS TCC gates, which do not
+// exist on Windows. Native capture/input permissions remain independent.
+// Linux stubs below fail closed until native permission support exists.
 // =============================================================================
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 mod macos {
     use super::PermissionRequestOutcome;
 
@@ -408,6 +407,39 @@ mod macos {
     }
     pub fn request_accessibility() -> PermissionRequestOutcome {
         PermissionRequestOutcome::new(true, true)
+    }
+    pub fn open_privacy_settings(_which: &str) -> bool {
+        false
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod macos {
+    use super::PermissionRequestOutcome;
+
+    pub fn check_screen_recording() -> bool {
+        false
+    }
+    pub fn request_screen_recording() -> PermissionRequestOutcome {
+        PermissionRequestOutcome::new(false, false)
+    }
+    pub fn check_microphone() -> String {
+        "denied".into()
+    }
+    pub fn check_camera() -> String {
+        "denied".into()
+    }
+    pub fn request_microphone() -> String {
+        "denied".into()
+    }
+    pub fn request_camera() -> String {
+        "denied".into()
+    }
+    pub fn check_accessibility() -> bool {
+        false
+    }
+    pub fn request_accessibility() -> PermissionRequestOutcome {
+        PermissionRequestOutcome::new(false, false)
     }
     pub fn open_privacy_settings(_which: &str) -> bool {
         false
@@ -498,7 +530,27 @@ pub fn open_privacy_settings(which: String) -> bool {
 mod tests {
     use super::{auth_status_string, privacy_settings_url, PermissionRequestOutcome};
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_stubs_do_not_claim_permissions() {
+        assert!(!super::check_screen_recording());
+        assert_eq!(
+            super::request_screen_recording(),
+            PermissionRequestOutcome::new(false, false)
+        );
+        assert_eq!(super::check_microphone(), "denied");
+        assert_eq!(super::request_microphone(), "denied");
+        assert_eq!(super::check_camera(), "denied");
+        assert_eq!(super::request_camera(), "denied");
+        assert!(!super::check_accessibility());
+        assert_eq!(
+            super::request_accessibility(),
+            PermissionRequestOutcome::new(false, false)
+        );
+        assert!(!super::open_privacy_settings("camera".into()));
+    }
+
+    #[cfg(target_os = "windows")]
     #[test]
     fn non_macos_adapters_do_not_gate_on_macos_tcc() {
         assert!(super::check_screen_recording());

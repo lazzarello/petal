@@ -1440,7 +1440,7 @@ pub fn start_receiver_for_room(
     });
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 pub fn start_receiver_for_room(
     app: &AppHandle,
     room: Arc<livekit::Room>,
@@ -1570,7 +1570,7 @@ pub fn start_receiver_for_room(
 // is gated on `window_fixtures`/compositor paths). `normalize` and
 // `pointer_targets` are platform-neutral — the physical-px-vs-logical-point
 // frame convention is absorbed by the caller, not these functions.
-#[cfg(all(test, not(target_os = "macos")))]
+#[cfg(all(test, target_os = "windows"))]
 mod windows_tests {
     use super::*;
 
