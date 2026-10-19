@@ -226,6 +226,13 @@ jobs:
           cache-dependency-path: web-harness/package-lock.json
       - run: npm ci
       - run: npm run build
+      # Rendered tests load Playwright from apps/desktop, not web-harness.
+      - name: Install desktop Playwright dependency
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Install Playwright browsers and Linux dependencies
+        working-directory: apps/desktop
+        run: npx playwright install --with-deps chromium-headless-shell webkit
       - run: npm test
       - name: Remote-control loopback preflight (#51)
         run: node ../apps/desktop/scripts/remote-control-local-loopback.mjs --check-only --skip-swift-typecheck
