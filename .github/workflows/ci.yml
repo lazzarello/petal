@@ -1,8 +1,7 @@
 # Continuous integration for Petal (issue #102).
 #
-# Two jobs, both on a FULL-Xcode macOS runner:
-#   - frontend: svelte-check + the static build (the same gates used locally).
-#   - rust:     cargo build + cargo test --lib of the real desktop crate.
+# Desktop Rust builds run on macOS, Windows, and Linux. The existing frontend,
+# backend, and web-harness jobs remain separate.
 #
 # The rust job deliberately sets RUSTFLAGS="" so cargo IGNORES the DEV-ONLY
 # Command Line Tools Swift rpath baked into apps/desktop/src-tauri/.cargo/
@@ -27,6 +26,9 @@ name: CI
 # the local Xcode 26.6 that builds this cleanly.
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -117,6 +119,73 @@ jobs:
             exit 1
           fi
           echo "OK: no CommandLineTools rpath in $BIN"
+
+  rust-windows:
+    name: Rust Windows (build + lib tests)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Build frontend
+        working-directory: apps/desktop
+        run: npm ci && npm run build
+      - name: cargo check
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --locked
+      - name: cargo build
+        working-directory: apps/desktop/src-tauri
+        run: cargo build --locked
+      - name: cargo test (lib)
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --lib --locked
+
+  rust-linux:
+    name: Rust Linux (build + lib tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang cmake pkg-config libclang-dev \
+            libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev libdbus-1-dev libasound2-dev libssl-dev \
+            libva-dev libpipewire-0.3-dev libxdo-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Build frontend
+        working-directory: apps/desktop
+        run: npm ci && npm run build
+      - name: cargo check
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --locked
+      - name: cargo build
+        working-directory: apps/desktop/src-tauri
+        run: cargo build --locked
+      - name: cargo test (lib)
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --lib --locked
 
   # #130: the gate must actually RUN the backend + web-harness tests (they were
   # never in CI before). These are pure JS/TS, so they run on cheap ubuntu (1x

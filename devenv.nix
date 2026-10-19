@@ -22,5 +22,4 @@
   # why didn't the robot use the languages feature of devenv?
   languages.rust.enable = true;
   languages.typescript.enable = true;
-
 }
