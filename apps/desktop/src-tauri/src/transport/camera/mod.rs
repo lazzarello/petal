@@ -372,6 +372,15 @@ pub fn list_modes(_preferred_device_id: Option<&str>) -> Result<Vec<CameraMode>,
     Ok(Vec::new())
 }
 
+#[cfg(target_os = "linux")]
+pub fn list_devices() -> Result<Vec<CameraDeviceInfo>, CameraError> {
+    Err(CameraError::Operation("camera capture is unsupported on Linux".into()))
+}
+#[cfg(target_os = "linux")]
+pub fn list_modes(_preferred_device_id: Option<&str>) -> Result<Vec<CameraMode>, CameraError> {
+    Err(CameraError::Operation("camera capture is unsupported on Linux".into()))
+}
+
 /// Open the requested camera and start delivering NV12 frames to `on_frame`
 /// (called on a capture thread — must be cheap and thread-safe). BLOCKS for
 /// up to a few hundred ms (`startRunning`/MF reader setup); call via
@@ -806,6 +815,15 @@ fn frame_from_packed_nv12(
         uv_stride: layout.width,
         capture_wall_time_us,
     })
+}
+
+#[cfg(target_os = "linux")]
+pub fn open_camera(
+    _preferred_device_id: Option<&str>,
+    _preferred_mode: Option<PreferredCameraMode>,
+    _on_frame: impl Fn(CameraFrame) + Send + Sync + 'static,
+) -> Result<Box<dyn CameraBackend>, CameraError> {
+    Err(CameraError::Operation("camera capture is unsupported on Linux".into()))
 }
 
 #[cfg(test)]

@@ -1674,13 +1674,13 @@ pub fn run() {
             if let Some(main_window) = app.get_webview_window("main") {
                 crate::windows_corner::make_native_rounded(&main_window);
             }
-            // Windows hover tab: the pill webview is created on the MAIN
-            // thread (WebView2 cannot be built from the tracker thread), then
-            // the cursor-following tracker starts.
-            let _ = windows_hover::create_pill_window(app.handle());
-            windows_hover::start(app.handle());
-            // Windows telepointer sender: name-tagged cursor over shared windows.
-            telepointer::start_sender(app.handle());
+            // Windows hover tab and telepointer require native Windows APIs.
+            #[cfg(target_os = "windows")]
+            {
+                let _ = windows_hover::create_pill_window(app.handle());
+                windows_hover::start(app.handle());
+                telepointer::start_sender(app.handle());
+            }
             // AI chat floating panel (#738): a hidden WebviewWindow singleton
             // hosting the ai-chat-panel route (macOS NSPanel parity).
             ai_chat::panel::create_ai_chat_panel(app.handle());
@@ -1761,15 +1761,25 @@ pub fn run() {
             camera_session::log_camera_preview_state,
             #[cfg(target_os = "windows")]
             camera_self_view::next_self_view_frame,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_list_windows,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_hide_window,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_activate_window,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_raise_participant_windows,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_start_drag,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_fit_to_source,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_begin_resize,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_resize_window,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_toggle_debug_panel,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_set_draw_active,
             draw::draw_send,
             plugins::bus::plugin_publish_data,
@@ -1784,8 +1794,11 @@ pub fn run() {
             plugins::registry::plugin_uninstall,
             plugins::registry::plugin_read_bundle,
             plugins::bus::plugin_state_snapshot,
+            #[cfg(target_os = "windows")]
             windows_share_overlay::share_overlay_set_draw_active,
+            #[cfg(target_os = "windows")]
             windows_share_overlay::share_overlay_draw_active,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_window_debug_stats,
             // Debug-mode setting (#669): cross-platform -- also registered on
             // the macOS invoke_handler list above.
@@ -1805,14 +1818,21 @@ pub fn run() {
             session::shared_window_ids,
             // Windows hover tab: same wire contract as the macOS hover-tab
             // commands.
+            #[cfg(target_os = "windows")]
             windows_hover::toggle_window_share,
+            #[cfg(target_os = "windows")]
             windows_hover::hover_tab_page_mounted,
+            #[cfg(target_os = "windows")]
             windows_hover::hover_tab_drag,
+            #[cfg(target_os = "windows")]
             windows_hover::set_hover_tab_menu_open,
             share_priority::get_share_priority,
             share_priority::set_share_priority,
+            #[cfg(target_os = "windows")]
             share_capture_options::share_capture_options,
+            #[cfg(target_os = "windows")]
             share_capture_options::set_share_fps,
+            #[cfg(target_os = "windows")]
             share_capture_options::set_share_cursor_in_video,
             // Petal View's label-addressed twins of the commands above: the
             // region route holds a window label, never a capture token.
@@ -1824,6 +1844,7 @@ pub fn run() {
             main_window::show_main_window,
             // Windows-only native corner radius toggle (pill mode flips the
             // main window between opaque-native-rounded and transparent).
+            #[cfg(target_os = "windows")]
             windows_corner::set_main_pill_mode,
             quit::quit_app,
             // Network Cockpit live diagnostics (issue #19): poller + journal

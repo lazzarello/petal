@@ -622,8 +622,10 @@ pub fn start_sender(app: &AppHandle) {
     let app = app.clone();
     #[cfg(target_os = "macos")]
     std::thread::spawn(move || sender_loop(app));
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     std::thread::spawn(move || sender_loop_windows(app));
+    #[cfg(target_os = "linux")]
+    { let _ = app; SENDER_ACTIVE.store(false, Ordering::SeqCst); }
 }
 
 /// The sender-side poll loop (see module doc comment for rate/rationale).
@@ -896,7 +898,7 @@ fn sender_loop(app: AppHandle) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct WindowsPointerKey {
     kind: PointerTargetKind,
@@ -904,7 +906,7 @@ struct WindowsPointerKey {
     owner_identity: String,
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 #[derive(Debug, Clone, PartialEq)]
 struct WindowsPointerTarget {
     key: WindowsPointerKey,
@@ -913,7 +915,7 @@ struct WindowsPointerTarget {
     root_hwnds: Vec<isize>,
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 fn select_windows_pointer_target<'a>(
     cursor: (f64, f64),
     topmost_root: Option<isize>,
@@ -933,7 +935,7 @@ fn select_windows_pointer_target<'a>(
         })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 fn windows_visibility_decisions(
     targets: &[WindowsPointerTarget],
     selected: Option<&WindowsPointerKey>,

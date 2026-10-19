@@ -12,6 +12,12 @@ target/
 src-tauri/target/
 src-tauri/gen/
 
+# devenv's machine-local state (keep devenv.lock tracked)
+.devenv/
+devenv.local.nix
+devenv.local.yaml
+.direnv/
+
 # Logs
 *.log
 # ...except the synthetic petal.log fixtures scripts/test-analyze-field-log.mjs
