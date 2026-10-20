@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { isLinux } from '../src/lib/platform.ts';
 
 const permissionRow = readFileSync(
   new URL('../src/lib/components/PermissionRow.svelte', import.meta.url),
@@ -60,6 +61,28 @@ test('required permission gates exclude camera', () => {
   );
   assert.doesNotMatch(launchRoute, /checkCamera/);
   assert.doesNotMatch(mainRoute, /checkCamera/);
+});
+
+test('Linux can complete identity onboarding and stay on the main menu without unavailable permissions', () => {
+  assert.equal(isLinux('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15'), true);
+  assert.equal(isLinux('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), false);
+  assert.equal(isLinux('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'), false);
+  assert.equal(isLinux('Mozilla/5.0 (Linux; Android 14)'), false);
+  assert.match(launchRoute, /permissionsOk: isLinux\(\) \|\| \(await permissionsOk\(\)\)/);
+  assert.match(mainRoute, /if \(!hasTauri \|\| isLinux\(\)\) return;/);
+  assert.match(onboardingRoute, /if \(isLinux\(\)\) \{\s*\/\/[^\n]*\n\s*step = 'identity';/);
+  assert.match(onboardingRoute, /const requiredPermissionsReady = \$derived\(\s*isLinux\(\) \|\|/);
+  assert.match(onboardingRoute, /if \(!name\.trim\(\)\) return;\s*completeOnboarding/);
+});
+
+test('Linux niri uses XWayland for WebKitGTK only when X11 is available and backend was not chosen', () => {
+  const lib = readFileSync(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8');
+  const linuxStartup = lib.slice(lib.indexOf('#[cfg(not(target_os = "macos"))]\n#[cfg_attr(mobile, tauri::mobile_entry_point)]'));
+  assert.match(linuxStartup, /#\[cfg\(target_os = "linux"\)\]\s*if std::env::var_os\("GDK_BACKEND"\)\.is_none\(\)/);
+  assert.match(linuxStartup, /std::env::var_os\("WAYLAND_DISPLAY"\)\.is_some\(\)/);
+  assert.match(linuxStartup, /std::env::var_os\("DISPLAY"\)\.is_some\(\)/);
+  assert.match(linuxStartup, /name\.eq_ignore_ascii_case\("niri"\)/);
+  assert.match(linuxStartup, /std::env::set_var\("GDK_BACKEND", "x11"\)/);
 });
 
 test('privacy settings opener uses native command before plugin fallback', () => {

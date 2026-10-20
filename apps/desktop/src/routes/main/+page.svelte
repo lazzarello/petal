@@ -77,6 +77,7 @@
   } from '$lib/data/windowGeometry';
   import { prefersReducedMotion } from '$lib/motion';
   import { COMMANDS, EVENTS, hasTauriBridge, type AutotestJoinResult } from '$lib/ipc';
+  import { isLinux } from '$lib/platform';
   import {
     checkAccessibility,
     checkMicrophone,
@@ -306,7 +307,7 @@
   }
 
   async function recheckRequiredPermissions() {
-    if (!hasTauri) return;
+    if (!hasTauri || isLinux()) return;
     try {
       if (!(await requiredPermissionsOk()) && routeActive) {
         await goto('/onboarding', { replaceState: true });

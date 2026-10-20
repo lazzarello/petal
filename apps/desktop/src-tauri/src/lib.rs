@@ -1614,6 +1614,19 @@ pub fn run() {
     load_env_file(concat!(env!("CARGO_MANIFEST_DIR"), "/../.env"));
     load_env_file(concat!(env!("CARGO_MANIFEST_DIR"), "/.env"));
 
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none()
+        && std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && std::env::var_os("DISPLAY").is_some()
+        && std::env::var("XDG_CURRENT_DESKTOP")
+            .is_ok_and(|desktops| desktops.split(':').any(|name| name.eq_ignore_ascii_case("niri")))
+    {
+        // shortcut: niri's Wayland WebKitGTK viewport reports negative dimensions;
+        // use XWayland until its native viewport sizing is fixed.
+        std::env::set_var("GDK_BACKEND", "x11");
+        log::info!("petal: using XWayland for WebKitGTK on niri");
+    }
+
     tauri::Builder::default()
         .manage(session::SessionState::default())
         .manage(transport::audio::AudioDevicePreferences::default())
