@@ -1618,13 +1618,13 @@ pub fn run() {
     if std::env::var_os("GDK_BACKEND").is_none()
         && std::env::var_os("WAYLAND_DISPLAY").is_some()
         && std::env::var_os("DISPLAY").is_some()
-        && std::env::var("XDG_CURRENT_DESKTOP")
-            .is_ok_and(|desktops| desktops.split(':').any(|name| name.eq_ignore_ascii_case("niri")))
+        && std::fs::read_to_string("/etc/os-release").is_ok_and(|release| {
+            release.lines().any(|line| line == "ID=nixos" || line == "ID=\"nixos\"")
+        })
     {
-        // shortcut: niri's Wayland WebKitGTK viewport reports negative dimensions;
-        // use XWayland until its native viewport sizing is fixed.
+        // shortcut: NixOS WebKitGTK can report a negative Wayland viewport (tauri-apps/tauri#12361); use XWayland until native rendering works.
         std::env::set_var("GDK_BACKEND", "x11");
-        log::info!("petal: using XWayland for WebKitGTK on niri");
+        log::info!("petal: using XWayland for WebKitGTK on NixOS");
     }
 
     tauri::Builder::default()

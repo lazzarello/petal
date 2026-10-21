@@ -75,13 +75,15 @@ test('Linux can complete identity onboarding and stay on the main menu without u
   assert.match(onboardingRoute, /if \(!name\.trim\(\)\) return;\s*completeOnboarding/);
 });
 
-test('Linux niri uses XWayland for WebKitGTK only when X11 is available and backend was not chosen', () => {
+test('NixOS uses XWayland for WebKitGTK only when X11 is available and backend was not chosen', () => {
   const lib = readFileSync(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8');
   const linuxStartup = lib.slice(lib.indexOf('#[cfg(not(target_os = "macos"))]\n#[cfg_attr(mobile, tauri::mobile_entry_point)]'));
   assert.match(linuxStartup, /#\[cfg\(target_os = "linux"\)\]\s*if std::env::var_os\("GDK_BACKEND"\)\.is_none\(\)/);
   assert.match(linuxStartup, /std::env::var_os\("WAYLAND_DISPLAY"\)\.is_some\(\)/);
   assert.match(linuxStartup, /std::env::var_os\("DISPLAY"\)\.is_some\(\)/);
-  assert.match(linuxStartup, /name\.eq_ignore_ascii_case\("niri"\)/);
+  assert.match(linuxStartup, /std::fs::read_to_string\("\/etc\/os-release"\)/);
+  assert.match(linuxStartup, /line == "ID=nixos" \|\| line == "ID=\\"nixos\\""/);
+  assert.doesNotMatch(linuxStartup, /XDG_CURRENT_DESKTOP/);
   assert.match(linuxStartup, /std::env::set_var\("GDK_BACKEND", "x11"\)/);
 });
 
