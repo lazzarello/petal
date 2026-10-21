@@ -31,6 +31,10 @@ use crate::session::{RoomGeneration, SessionState, SharedWindowScreenStatus};
 use crate::transport::publisher::RoomConnection;
 
 use crate::remote_control_core::*;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+struct MacPlatformControl;
+
+#[cfg(target_os = "linux")]
 struct MacPlatformControl;
 
 impl PlatformControl for MacPlatformControl {
@@ -125,6 +129,15 @@ fn set_remote_window_control_active(
     active: bool,
 ) -> Result<(), String> {
     crate::windows_compositor::set_remote_control_active(app, window_id, owner_identity, active)
+}
+
+#[cfg(target_os = "linux")]
+fn remote_window_exists(_: &str, _: u32) -> bool { false }
+#[cfg(target_os = "linux")]
+fn remote_window_owner(_: u32, _: Option<&str>) -> Option<String> { None }
+#[cfg(target_os = "linux")]
+fn set_remote_window_control_active(_: &AppHandle, _: u32, _: Option<&str>, _: bool) -> Result<(), String> {
+    Err("remote control is unsupported on Linux".into())
 }
 
 struct TauriControlSurface<'a> {
@@ -2757,9 +2770,14 @@ fn active_display_share(state: &SessionState, window_id: u32) -> bool {
     state.active_share_is_display(window_id)
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
 fn active_display_share(state: &SessionState, window_id: u32) -> bool {
     state.is_display_share(window_id)
+}
+
+#[cfg(target_os = "linux")]
+fn active_display_share(state: &SessionState, window_id: u32) -> bool {
+    state.active_share_is_display(window_id)
 }
 
 /// Positive pid sentinel for a display share: a display has no owning process.
@@ -19050,6 +19068,8 @@ pub(crate) mod input {
     pub fn accessibility_trusted() -> bool {
         false
     }
+
+    pub fn release_session_tap_gestures_for_window(_window_id: u32) {}
 
     pub fn prompt_accessibility() -> bool {
         false

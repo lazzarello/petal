@@ -57,6 +57,7 @@
   } from '$lib/components/Onboarding.svelte';
   import type { IdentityColor } from '$lib/components/Avatar.svelte';
   import { session, completeOnboarding } from '$lib/stores/session.svelte';
+  import { isLinux } from '$lib/platform';
   import {
     transitionAccessibilityRepair,
     type AccessibilityRepairEvent
@@ -86,7 +87,12 @@
     // No onboardingComplete redirect here anymore — the `/` splash decides
     // whether this route should be shown (permission state is re-evaluated
     // every launch there; see issue #20). Landing here means it IS needed.
-    seedPermissions();
+    if (isLinux()) {
+      // No Linux permission prompts exist yet; collect identity, not impossible grants.
+      step = 'identity';
+    } else {
+      seedPermissions();
+    }
   });
 
   let screenRecordingStatus = $state<ScreenRecordingStatus>('in-progress');
@@ -110,9 +116,10 @@
   let step = $state<'permissions' | 'identity'>('permissions');
 
   const requiredPermissionsReady = $derived(
-    screenRecordingStatus === 'enabled' &&
-      micStatus === 'enabled' &&
-      accessibilityStatus === 'enabled'
+    isLinux() ||
+      (screenRecordingStatus === 'enabled' &&
+        micStatus === 'enabled' &&
+        accessibilityStatus === 'enabled')
   );
 
   /** Map the Rust mic/camera AuthStatus onto Onboarding's required gate enum. */

@@ -7,10 +7,21 @@ dist/
 build/
 .svelte-kit/
 
+# Python preview environment and bytecode
+.venv/
+__pycache__/
+*.pyc
+
 # Rust / Tauri
 target/
 src-tauri/target/
 src-tauri/gen/
+
+# devenv's machine-local state (keep devenv.lock tracked)
+.devenv/
+devenv.local.nix
+devenv.local.yaml
+.direnv/
 
 # Logs
 *.log

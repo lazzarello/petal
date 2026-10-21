@@ -48,6 +48,7 @@
   import { listRooms } from '$lib/data/rooms';
   import { fetchLaunchLocationClass, launchRoute } from '$lib/data/launchLocation';
   import { hasTauriBridge } from '$lib/ipc';
+  import { isLinux } from '$lib/platform';
 
   async function permissionsOk() {
     const [screen, mic, accessibility] = await Promise.all([
@@ -79,14 +80,15 @@
       // Warm-up is background; the permission recheck is a fast LOCAL
       // TCC/IPC read (no network), so it gates the /main paint — a
       // revoked-permission user must not flash the menu for the invoke
-      // duration before being bounced to onboarding. listRooms() (the
-      // network part) stays background per #8.
+      // duration before being bounced to onboarding. Linux has no native
+      // permission requests yet, so don't send completed users to an
+      // unfinishable permission checklist. listRooms() stays background.
       listRooms().catch((e) => console.warn('launch: listRooms warm-up failed', e));
       const route = launchRoute({
         onboardingComplete,
         hasBridge,
         location,
-        permissionsOk: await permissionsOk()
+        permissionsOk: isLinux() || (await permissionsOk())
       });
       goto(route, { replaceState: true });
     } catch (e) {

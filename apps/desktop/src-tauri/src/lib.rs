@@ -1,7 +1,7 @@
 // Windows and macOS both carry a working (still maturing) media stack: macOS
 // uses the modules under `#[cfg(target_os = "macos")]`, Windows uses the
-// `windows_*` modules and the real session in session_stub.rs. The non-macOS
-// stubs below exist only where a macOS module has no Windows counterpart yet.
+// `windows_*` modules and the real session in session_stub.rs. Linux uses
+// session_linux.rs: a compile-only session with no native media support.
 #![cfg_attr(
     not(target_os = "macos"),
     allow(
@@ -195,8 +195,11 @@ pub mod video_color;
 pub mod rooms;
 #[cfg(target_os = "macos")]
 mod session;
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 #[path = "session_stub.rs"]
+mod session;
+#[cfg(target_os = "linux")]
+#[path = "session_linux.rs"]
 mod session;
 mod share_border;
 #[cfg(target_os = "windows")]
@@ -1611,6 +1614,19 @@ pub fn run() {
     load_env_file(concat!(env!("CARGO_MANIFEST_DIR"), "/../.env"));
     load_env_file(concat!(env!("CARGO_MANIFEST_DIR"), "/.env"));
 
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none()
+        && std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && std::env::var_os("DISPLAY").is_some()
+        && std::fs::read_to_string("/etc/os-release").is_ok_and(|release| {
+            release.lines().any(|line| line == "ID=nixos" || line == "ID=\"nixos\"")
+        })
+    {
+        // shortcut: NixOS WebKitGTK can report a negative Wayland viewport (tauri-apps/tauri#12361); use XWayland until native rendering works.
+        std::env::set_var("GDK_BACKEND", "x11");
+        log::info!("petal: using XWayland for WebKitGTK on NixOS");
+    }
+
     tauri::Builder::default()
         .manage(session::SessionState::default())
         .manage(transport::audio::AudioDevicePreferences::default())
@@ -1662,6 +1678,7 @@ pub fn run() {
             arm_main_window_reveal_fallback(app.handle());
             // Desktop app, not a browser: no autofill dropdowns / password-save
             // prompts on any input, ever (engine-level, sticks for new inputs).
+            #[cfg(target_os = "windows")]
             autofill::disable_autofill(app.handle());
             // Native corner radius: every rectangular Petal window is created
             // `transparent: true` from tauri.conf.json (shared with macOS), but
@@ -1674,17 +1691,20 @@ pub fn run() {
             if let Some(main_window) = app.get_webview_window("main") {
                 crate::windows_corner::make_native_rounded(&main_window);
             }
-            // Windows hover tab: the pill webview is created on the MAIN
-            // thread (WebView2 cannot be built from the tracker thread), then
-            // the cursor-following tracker starts.
-            let _ = windows_hover::create_pill_window(app.handle());
-            windows_hover::start(app.handle());
-            // Windows telepointer sender: name-tagged cursor over shared windows.
-            telepointer::start_sender(app.handle());
+            // Windows hover tab and telepointer require native Windows APIs.
+            #[cfg(target_os = "windows")]
+            {
+                let _ = windows_hover::create_pill_window(app.handle());
+                windows_hover::start(app.handle());
+                telepointer::start_sender(app.handle());
+            }
             // AI chat floating panel (#738): a hidden WebviewWindow singleton
             // hosting the ai-chat-panel route (macOS NSPanel parity).
-            ai_chat::panel::create_ai_chat_panel(app.handle());
-            log::info!("petal: ai-chat panel created");
+            #[cfg(target_os = "windows")]
+            {
+                ai_chat::panel::create_ai_chat_panel(app.handle());
+                log::info!("petal: ai-chat panel created");
+            }
             #[cfg(target_os = "windows")]
             {
                 control_consent::create_control_consent_panel(app.handle());
@@ -1761,15 +1781,25 @@ pub fn run() {
             camera_session::log_camera_preview_state,
             #[cfg(target_os = "windows")]
             camera_self_view::next_self_view_frame,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_list_windows,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_hide_window,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_activate_window,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_raise_participant_windows,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_start_drag,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_fit_to_source,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_begin_resize,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_resize_window,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_toggle_debug_panel,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_set_draw_active,
             draw::draw_send,
             plugins::bus::plugin_publish_data,
@@ -1784,8 +1814,11 @@ pub fn run() {
             plugins::registry::plugin_uninstall,
             plugins::registry::plugin_read_bundle,
             plugins::bus::plugin_state_snapshot,
+            #[cfg(target_os = "windows")]
             windows_share_overlay::share_overlay_set_draw_active,
+            #[cfg(target_os = "windows")]
             windows_share_overlay::share_overlay_draw_active,
+            #[cfg(target_os = "windows")]
             windows_compositor::compositor_window_debug_stats,
             // Debug-mode setting (#669): cross-platform -- also registered on
             // the macOS invoke_handler list above.
@@ -1799,31 +1832,43 @@ pub fn run() {
             remote_control::remote_control_request_timed_out,
             remote_control::remote_control_revoke,
             remote_control::remote_control_answer_consent,
+            #[cfg(target_os = "windows")]
             remote_control::remote_control_answer_escalation,
             session::share_window,
             session::set_share_control_mode,
             session::shared_window_ids,
             // Windows hover tab: same wire contract as the macOS hover-tab
             // commands.
+            #[cfg(target_os = "windows")]
             windows_hover::toggle_window_share,
+            #[cfg(target_os = "windows")]
             windows_hover::hover_tab_page_mounted,
+            #[cfg(target_os = "windows")]
             windows_hover::hover_tab_drag,
+            #[cfg(target_os = "windows")]
             windows_hover::set_hover_tab_menu_open,
             share_priority::get_share_priority,
             share_priority::set_share_priority,
+            #[cfg(target_os = "windows")]
             share_capture_options::share_capture_options,
+            #[cfg(target_os = "windows")]
             share_capture_options::set_share_fps,
+            #[cfg(target_os = "windows")]
             share_capture_options::set_share_cursor_in_video,
             // Petal View's label-addressed twins of the commands above: the
             // region route holds a window label, never a capture token.
+            #[cfg(target_os = "windows")]
             region_window::region_share_capture_options,
+            #[cfg(target_os = "windows")]
             region_window::set_region_share_fps,
+            #[cfg(target_os = "windows")]
             region_window::set_region_share_cursor_in_video,
             gallery_bridge::gallery_bridge_config,
             main_window::open_main_route,
             main_window::show_main_window,
             // Windows-only native corner radius toggle (pill mode flips the
             // main window between opaque-native-rounded and transparent).
+            #[cfg(target_os = "windows")]
             windows_corner::set_main_pill_mode,
             quit::quit_app,
             // Network Cockpit live diagnostics (issue #19): poller + journal
@@ -1867,7 +1912,9 @@ pub fn run() {
             ai_chat::commands::ai_chat_control_reject,
             ai_chat::commands::ai_chat_control_resume,
             ai_chat::commands::ai_chat_control_status,
+            #[cfg(target_os = "windows")]
             ai_chat::panel::ai_chat_panel_present,
+            #[cfg(target_os = "windows")]
             ai_chat::panel::ai_chat_panel_dismiss,
             #[cfg(target_os = "windows")]
             control_consent::control_consent_present,

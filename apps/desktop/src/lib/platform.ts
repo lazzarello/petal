@@ -24,3 +24,9 @@ export function isWindows(ua?: string): boolean {
 export function isMac(ua?: string): boolean {
   return platformKey(ua) === 'macos';
 }
+
+export function isLinux(
+  ua: string = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+): boolean {
+  return /Linux/i.test(ua) && !/Android/i.test(ua);
+}

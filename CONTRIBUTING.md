@@ -5,9 +5,9 @@ you need to build it, and the handful of conventions that are non-obvious.
 
 ## Before you build: the toolchain requirement
 
-Petal *runs* on macOS 13+, but **building it currently requires the macOS 26 SDK
-(Xcode 26.x)**. The `apple-metal` crate, pulled in transitively by our vendored
-`screencapturekit`, uses Metal APIs that do not exist in earlier SDKs; on an
+Petal *runs* on macOS 13+, but **building the supported macOS app requires the
+macOS 26 SDK (Xcode 26.x)**. Experimental Linux builds are described below.
+The `apple-metal` crate, pulled in transitively by our vendored `screencapturekit`, uses Metal APIs that do not exist in earlier SDKs; on an
 older one the Swift bridge fails to compile with an unhelpful "cannot find
 `MTLSamplerReductionMode` in scope".
 
@@ -43,13 +43,42 @@ re-sign does not. Logs are at `~/Library/Logs/Petal/petal.log`.
 Never test against Petal's hosted infrastructure. Run a local stack, or see
 [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 
+## Experimental Linux build and local PipeWire preview
+
+The PR-triggered `Linux experimental` workflow builds and tests the Rust desktop crate
+and compiles the standalone PipeWire preview on Ubuntu. It cannot run a real
+ScreenCast portal selection on a headless CI runner. From the repo root on a
+Wayland desktop with a ScreenCast portal backend (validated on NixOS/niri):
+
+```sh
+devenv shell
+cd apps/desktop
+npm ci && npm run build
+cd src-tauri
+sh -c 'timeout 900s cargo build --locked > /tmp/petal-linux-build.log 2>&1; result=$?; tail -30 /tmp/petal-linux-build.log; exit "$result"'
+sh -c 'timeout 900s cargo test --lib --locked > /tmp/petal-linux-test.log 2>&1; result=$?; tail -30 /tmp/petal-linux-test.log; exit "$result"'
+cd ../../..
+uv sync --active --project apps/desktop/scripts
+sh -c 'cc -Wall -Wextra -Werror -o .devenv/state/petal-pw-native-probe apps/desktop/scripts/pipewire-native-probe.c $(pkg-config --cflags --libs libpipewire-0.3 gtk+-3.0)'
+python3 apps/desktop/scripts/wayland-capture-spike.py --self-test
+python3 apps/desktop/scripts/wayland-capture-spike.py --native-viewer .devenv/state/petal-pw-native-probe
+```
+
+Select a non-sensitive window in the system consent dialog; close the local
+preview window to end the portal session. The native viewer receives live linear
+DMA-BUF frames and displays them locally. **It does not publish to LiveKit or
+enable Linux meeting sessions** (`session_linux.rs` still returns unsupported).
+A green CI build proves compilation, not end-to-end peer sharing or Linux
+release readiness.
+
 ## The gate
 
 ```bash
 scripts/ci-local.sh
 ```
 
-This is the primary gate and mirrors CI. Budget real time for it — it is
+This is the primary macOS gate and mirrors the manual CI workflow; on Linux,
+use the experimental workflow and commands above. Budget real time for it — it is
 around twenty steps, not five: the version-lockstep check (nine fields plus
 the three versioned SBOMs), release tooling unit tests (`bump-version`,
 `publish-blob`, source provenance), the harness contract tests, frontend
