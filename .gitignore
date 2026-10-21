@@ -7,6 +7,11 @@ dist/
 build/
 .svelte-kit/
 
+# Python preview environment and bytecode
+.venv/
+__pycache__/
+*.pyc
+
 # Rust / Tauri
 target/
 src-tauri/target/

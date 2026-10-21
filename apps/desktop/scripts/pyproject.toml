@@ -1,0 +1,5 @@
+[project]
+name = "petal-wayland-capture-spike"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["PyGObject>=3.42"]

@@ -8,12 +8,14 @@ PipeWire's GStreamer plugin, and a working ScreenCast portal backend.
 
 import argparse
 import os
+import subprocess
 import sys
 
 import gi
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gio, GLib, Gst
+
 
 PORTAL = "org.freedesktop.portal.Desktop"
 OBJECT = "/org/freedesktop/portal/desktop"
@@ -23,8 +25,15 @@ REQUEST = "org.freedesktop.portal.Request"
 
 def call(bus, method, signature, values, interface=INTERFACE):
     return bus.call_sync(
-        PORTAL, OBJECT, interface, method, GLib.Variant(signature, values),
-        None, Gio.DBusCallFlags.NONE, 30_000, None,
+        PORTAL,
+        OBJECT,
+        interface,
+        method,
+        GLib.Variant(signature, values),
+        None,
+        Gio.DBusCallFlags.NONE,
+        30_000,
+        None,
     ).unpack()
 
 
@@ -38,17 +47,20 @@ def request(bus, method, signature, values):
         if path == responses.get("expected"):
             loop.quit()
 
-    sub = bus.signal_subscribe(PORTAL, REQUEST, "Response", None, None,
-                               Gio.DBusSignalFlags.NONE, on_response)
+    sub = bus.signal_subscribe(
+        PORTAL, REQUEST, "Response", None, None, Gio.DBusSignalFlags.NONE, on_response
+    )
     try:
-        path, = call(bus, method, signature, values)
+        (path,) = call(bus, method, signature, values)
         responses["expected"] = path
         if path not in responses:
             waiting = {"timed_out": False}
+
             def timed_out():
                 waiting["timed_out"] = True
                 loop.quit()
                 return GLib.SOURCE_REMOVE
+
             timer = GLib.timeout_add_seconds(90, timed_out)
             try:
                 loop.run()
@@ -74,60 +86,119 @@ def pipeline_for(fd, node):
 
 
 def self_test(bus):
-    for element in ("pipewiresrc", "videoconvert", "autovideosink", "videotestsrc", "fakesink"):
+    for element in (
+        "pipewiresrc",
+        "videoconvert",
+        "autovideosink",
+        "videotestsrc",
+        "fakesink",
+    ):
         assert Gst.ElementFactory.find(element), f"missing GStreamer plugin: {element}"
     call(bus, "Get", "(ss)", (INTERFACE, "version"), "org.freedesktop.DBus.Properties")
     pipe = Gst.parse_launch("videotestsrc num-buffers=3 ! videoconvert ! fakesink")
     assert pipe.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.FAILURE
-    message = pipe.get_bus().timed_pop_filtered(10 * Gst.SECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR)
+    message = pipe.get_bus().timed_pop_filtered(
+        10 * Gst.SECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR
+    )
     pipe.set_state(Gst.State.NULL)
-    assert message and message.type == Gst.MessageType.EOS, "synthetic video pipeline failed"
-    print("PASS: portal interface, PipeWire plugin and synthetic video pipeline available")
+    assert message and message.type == Gst.MessageType.EOS, (
+        "synthetic video pipeline failed"
+    )
+    print(
+        "PASS: portal interface, PipeWire plugin and synthetic video pipeline available"
+    )
 
 
-def view(bus):
+def view(bus, native_probe=None, native_viewer=None):
     session = None
     fd = None
     pipe = None
     try:
         token = f"petal_{os.getpid()}"
-        created = request(bus, "CreateSession", "(a{sv})", ({
-            "handle_token": GLib.Variant("s", token + "_create"),
-            "session_handle_token": GLib.Variant("s", token + "_session"),
-        },))
+        created = request(
+            bus,
+            "CreateSession",
+            "(a{sv})",
+            (
+                {
+                    "handle_token": GLib.Variant("s", token + "_create"),
+                    "session_handle_token": GLib.Variant("s", token + "_session"),
+                },
+            ),
+        )
         session = created["session_handle"]
-        request(bus, "SelectSources", "(oa{sv})", (session, {
-            "handle_token": GLib.Variant("s", token + "_select"),
-            "types": GLib.Variant("u", 3),  # portal screen or window
-            "multiple": GLib.Variant("b", False),
-        }))
-        started = request(bus, "Start", "(osa{sv})", (session, "", {
-            "handle_token": GLib.Variant("s", token + "_start"),
-        }))
+        request(
+            bus,
+            "SelectSources",
+            "(oa{sv})",
+            (
+                session,
+                {
+                    "handle_token": GLib.Variant("s", token + "_select"),
+                    "types": GLib.Variant("u", 3),  # portal screen or window
+                    "multiple": GLib.Variant("b", False),
+                },
+            ),
+        )
+        started = request(
+            bus,
+            "Start",
+            "(osa{sv})",
+            (
+                session,
+                "",
+                {
+                    "handle_token": GLib.Variant("s", token + "_start"),
+                },
+            ),
+        )
         streams = started.get("streams", [])
         if len(streams) != 1:
             raise RuntimeError(f"expected one video stream, got {len(streams)}")
         node = streams[0][0]
-        if not isinstance(node, int) or not 0 <= node <= 0xffffffff:
+        if not isinstance(node, int) or not 0 <= node <= 0xFFFFFFFF:
             raise ValueError("portal returned invalid PipeWire node id")
         reply, fds = bus.call_with_unix_fd_list_sync(
-            PORTAL, OBJECT, INTERFACE, "OpenPipeWireRemote",
-            GLib.Variant("(oa{sv})", (session, {})), GLib.VariantType.new("(h)"),
-            Gio.DBusCallFlags.NONE, 30_000, None, None,
+            PORTAL,
+            OBJECT,
+            INTERFACE,
+            "OpenPipeWireRemote",
+            GLib.Variant("(oa{sv})", (session, {})),
+            GLib.VariantType.new("(h)"),
+            Gio.DBusCallFlags.NONE,
+            30_000,
+            None,
+            None,
         )
         fd = fds.get(reply.unpack()[0])
+        if native_probe or native_viewer:
+            command = [native_probe or native_viewer, str(fd), str(node)]
+            if native_viewer:
+                command.append("--view")
+            try:
+                subprocess.run(command, pass_fds=(fd,), check=True)
+            except (OSError, subprocess.CalledProcessError) as error:
+                raise RuntimeError(f"native viewer/probe failed: {error}") from error
+            return
         pipe = pipeline_for(fd, node)
         if pipe.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-            message = pipe.get_bus().timed_pop_filtered(Gst.SECOND, Gst.MessageType.ERROR)
+            message = pipe.get_bus().timed_pop_filtered(
+                Gst.SECOND, Gst.MessageType.ERROR
+            )
             if message:
                 error, detail = message.parse_error()
-                raise RuntimeError(f"PipeWire viewer failed to start: {error}: {detail}")
+                raise RuntimeError(
+                    f"PipeWire viewer failed to start: {error}: {detail}"
+                )
             raise RuntimeError("PipeWire viewer failed to start (no GStreamer error)")
-        print("Portal-selected stream is open; close the viewer or press Ctrl-C to stop.")
+        print(
+            "Portal-selected stream is open; close the viewer or press Ctrl-C to stop."
+        )
         bus_messages = pipe.get_bus()
         while True:
             message = bus_messages.timed_pop_filtered(
-                Gst.SECOND, Gst.MessageType.ERROR | Gst.MessageType.EOS,
+                Gst.SECOND,
+                Gst.MessageType.ERROR | Gst.MessageType.EOS,
             )
             if message and message.type == Gst.MessageType.ERROR:
                 error, detail = message.parse_error()
@@ -141,26 +212,54 @@ def view(bus):
             os.close(fd)
         if session:
             try:
-                bus.call_sync(PORTAL, session, "org.freedesktop.portal.Session", "Close",
-                              None, None, Gio.DBusCallFlags.NONE, 5_000, None)
+                bus.call_sync(
+                    PORTAL,
+                    session,
+                    "org.freedesktop.portal.Session",
+                    "Close",
+                    None,
+                    None,
+                    Gio.DBusCallFlags.NONE,
+                    5_000,
+                    None,
+                )
             except GLib.Error as error:
                 print(f"could not close portal session: {error}", file=sys.stderr)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--self-test", action="store_true", help="no capture or consent dialog")
+    parser.add_argument(
+        "--self-test", action="store_true", help="no capture or consent dialog"
+    )
+    native = parser.add_mutually_exclusive_group()
+    native.add_argument(
+        "--native-probe",
+        metavar="PATH",
+        help="inspect formats and receive one native video frame",
+    )
+    native.add_argument(
+        "--native-viewer",
+        metavar="PATH",
+        help="preview linear PipeWire video in a local GTK window",
+    )
     args = parser.parse_args()
     Gst.init(None)
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
     if args.self_test:
         self_test(bus)
     else:
-        view(bus)
+        view(bus, args.native_probe, args.native_viewer)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (GLib.Error, RuntimeError, TimeoutError, ValueError, AssertionError) as error:
+    except (
+        GLib.Error,
+        RuntimeError,
+        TimeoutError,
+        ValueError,
+        AssertionError,
+    ) as error:
         sys.exit(f"spike failed: {error}")

@@ -1,0 +1,55 @@
+# Cheap PR gate for the experimental Linux build and standalone PipeWire viewer.
+# A CI runner has no user's ScreenCast consent dialog, so live preview is manual.
+name: Linux experimental
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-experimental-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (build + lib tests + PipeWire preview compile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang cmake pkg-config libclang-dev \
+            libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev libdbus-1-dev libasound2-dev libssl-dev \
+            libva-dev libpipewire-0.3-dev libxdo-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Build frontend
+        working-directory: apps/desktop
+        run: npm ci && npm run build
+      - name: Build Linux desktop
+        working-directory: apps/desktop/src-tauri
+        run: cargo build --locked
+      - name: Test Linux desktop library
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --lib --locked
+      - name: Compile PipeWire preview and check portal script syntax
+        run: |
+          read -r -a pw_flags <<< "$(pkg-config --cflags --libs libpipewire-0.3 gtk+-3.0)"
+          cc -Wall -Wextra -Werror -o "$RUNNER_TEMP/petal-pw-native-probe" \
+            apps/desktop/scripts/pipewire-native-probe.c "${pw_flags[@]}"
+          python3 -m py_compile apps/desktop/scripts/wayland-capture-spike.py
